@@ -5,6 +5,9 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  preview: {
+    allowedHosts: ['andreass-macbook-pro.tailf11517.ts.net'],
+  },
   resolve: {
     alias: { '@': path.resolve(__dirname, './src') },
     dedupe: ['react', 'react-dom', 'react-router', '@evenrealities/even_hub_sdk', '@jappyjan/even-better-sdk', 'upng-js'],

@@ -6,6 +6,7 @@ import { recordingScreen } from './screens/recording'
 import { pickingScreen } from './screens/picking'
 import { confirmingScreen } from './screens/confirming'
 import { answeringScreen } from './screens/answering'
+import { browsingScreen } from './screens/browsing'
 
 export type { AppSnapshot, AppActions }
 
@@ -19,6 +20,7 @@ const screens: Record<RoutableMode, GlassScreen<AppSnapshot, AppActions>> = {
   'recording-turn': recordingScreen,
   'confirming-transcript': confirmingScreen,
   'answering': answeringScreen,
+  'browsing-folder': browsingScreen,
 }
 
 export const { toDisplayData, onGlassAction } = createGlassScreenRouter(screens, 'main')

@@ -38,17 +38,28 @@ export const confirmingScreen: GlassScreen<AppSnapshot, AppActions> = {
     for (const l of wrapped.slice(0, 7)) lines.push(line(l))
 
     while (lines.length < 9) lines.push(line(''))
-    lines.push(line('tap: send · 2tap: cancel', 'meta'))
+    lines.push(line(
+      flow === 'new'
+        ? 'tap: send · 2tap: cancel · swipe: project'
+        : 'tap: send · 2tap: cancel',
+      'meta',
+    ))
     return { lines }
   },
 
-  action(action, nav, _snapshot, ctx) {
+  action(action, nav, snapshot, ctx) {
     if (action.type === 'SELECT_HIGHLIGHTED') {
       ctx.confirmTranscript()
       return nav
     }
     if (action.type === 'GO_BACK') {
       ctx.cancelTranscript()
+      return nav
+    }
+    // andreas-mods: swiping on a new-session confirm opens the project picker
+    // so the prompt can start somewhere other than the default project.
+    if (action.type === 'HIGHLIGHT_MOVE' && snapshot.confirmTranscriptFlow === 'new') {
+      ctx.changeTranscriptProject()
       return nav
     }
     return nav

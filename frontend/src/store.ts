@@ -43,6 +43,11 @@ export interface AppState {
 
   scrollingTranscript: boolean
   sidebarVisible: boolean
+
+  // andreas-mods: folder browser
+  browsePath: string | null
+  browseParent: string | null
+  browseDirs: string[]
 }
 
 const initialState: AppState = {
@@ -77,6 +82,10 @@ const initialState: AppState = {
   pendingQuestion: null,
   scrollingTranscript: false,
   sidebarVisible: false,
+
+  browsePath: null,
+  browseParent: null,
+  browseDirs: [],
 }
 
 let state: AppState = initialState
@@ -263,6 +272,10 @@ export const store = {
 
   setSidebarVisible(v: boolean): void {
     set({ sidebarVisible: v, lastActivityAt: Date.now() })
+  },
+
+  setBrowseState(path: string, parent: string | null, dirs: string[]): void {
+    set({ browsePath: path, browseParent: parent, browseDirs: dirs, navIndex: 0, lastActivityAt: Date.now() })
   },
 
   getCachedTranscript(sessionId: string): TranscriptEvent[] | null {

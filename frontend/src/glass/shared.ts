@@ -47,6 +47,11 @@ export interface AppSnapshot {
 
   // Sidebar overlay: true = show session list, false = full-screen transcript
   sidebarVisible: boolean
+
+  // andreas-mods: folder browser
+  browsePath: string | null
+  browseParent: string | null
+  browseDirs: string[]
 }
 
 export interface AppActions {
@@ -69,6 +74,14 @@ export interface AppActions {
 
   confirmTranscript(): void
   cancelTranscript(): void
+  // andreas-mods: from the confirm screen, re-route the pending prompt to a
+  // different project (swipe) instead of the default.
+  changeTranscriptProject(): void
 
   answerQuestion(answer: string): void
+
+  // andreas-mods: folder browser
+  openFolderBrowser(): void
+  browseTo(path: string): void
+  pickBrowsedFolder(path: string): void
 }

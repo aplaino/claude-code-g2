@@ -50,5 +50,12 @@ export type AppMode =
   | 'recording-turn'
   | 'confirming-transcript'  // Phase 3: voice feedback confirmation
   | 'answering'              // Phase 3: AskUserQuestion answer picker
+  | 'browsing-folder'        // andreas-mods: ad-hoc directory picker
+
+export interface BrowseResult {
+  path: string
+  parent: string | null
+  dirs: string[]
+}
 
 export type ConnectionStatus = 'unknown' | 'ok' | 'error'

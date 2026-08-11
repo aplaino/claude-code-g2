@@ -10,8 +10,10 @@ function truncate(text: string, maxLen: number): string {
   return text.slice(0, maxLen - 1) + '…'
 }
 
+const BROWSE = '⌂ browse folders…'
+
 function items(snapshot: AppSnapshot): string[] {
-  return [...snapshot.projects, '× cancel']
+  return [...snapshot.projects, BROWSE, '× cancel']
 }
 
 export const pickingScreen: GlassScreen<AppSnapshot, AppActions> = {
@@ -21,7 +23,7 @@ export const pickingScreen: GlassScreen<AppSnapshot, AppActions> = {
 
     // Compact header: what Whisper heard + project count
     const heard = (snapshot.pendingTranscript ?? '').trim()
-    lines.push(line(`PICK PROJECT  ${list.length - 1} dirs`, 'meta'))
+    lines.push(line(`PICK PROJECT  ${list.length - 2} dirs`, 'meta'))
     lines.push(line('━'.repeat(40), 'meta'))
     if (heard) {
       lines.push(line(`> ${truncate(heard, 42)}`))
@@ -50,6 +52,8 @@ export const pickingScreen: GlassScreen<AppSnapshot, AppActions> = {
       const idx = Math.min(nav.highlightedIndex, max)
       if (idx === max) {
         ctx.cancelRecording()
+      } else if (idx === max - 1) {
+        ctx.openFolderBrowser()
       } else {
         const name = snapshot.projects[idx]
         if (name) ctx.pickProject(name)

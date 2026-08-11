@@ -1,5 +1,6 @@
 import type {
   BackendConfig,
+  BrowseResult,
   Session,
   SessionSummary,
   SseEvent,
@@ -114,13 +115,20 @@ export async function getSession(id: string): Promise<Session> {
   return body.session
 }
 
+export async function browseDirs(dirPath?: string): Promise<BrowseResult> {
+  const qs = dirPath ? `?path=${encodeURIComponent(dirPath)}` : ''
+  const res = await authFetch(`/api/browse${qs}`)
+  if (!res.ok) throw new Error(`browse: ${res.status}`)
+  return res.json()
+}
+
 export async function createSession(
-  projectName: string,
+  target: { projectName: string } | { cwd: string },
   firstPrompt: string,
 ): Promise<SessionSummary> {
   const res = await authFetch('/api/sessions', {
     method: 'POST',
-    body: JSON.stringify({ projectName, firstPrompt }),
+    body: JSON.stringify({ ...target, firstPrompt }),
   })
   if (!res.ok) {
     const err = await res.text().catch(() => '')

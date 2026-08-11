@@ -9,6 +9,7 @@ import type { AppSnapshot, AppActions } from './shared'
 import { isRecordingMode, store, useAppState } from '../store'
 import {
   bootstrap,
+  browseDirs,
   createSession,
   deleteSession as apiDeleteSession,
   getSession,
@@ -23,6 +24,27 @@ function fallbackModeAfterRecording(): AppMode {
   return 'main'
 }
 
+// andreas-mods: Whisper transcribes spoken slash commands as literal words
+// ("Slash commit."). Rewrite "slash <word> ..." into "/<word> ..." so custom
+// slash commands and skills reach Claude intact. The rewritten form shows on
+// the confirm screen before anything is sent.
+export function normalizeSpokenCommand(text: string): string {
+  const m = /^slash[,.]?\s+(\S+)(.*)$/i.exec(text.trim())
+  if (!m) return text
+  const command = m[1]!.toLowerCase().replace(/[.,!?]+$/, '')
+  const rest = (m[2] ?? '').replace(/[.!?]+\s*$/, '').trim()
+  return rest ? `/${command} ${rest}` : `/${command}`
+}
+
+// Commands the app handles itself instead of sending to Claude. Each turn
+// already runs a fresh `claude -p` process, so CLI built-ins like /exit have
+// no process to act on — "exit" here means "close this session view".
+const APP_COMMANDS: Record<string, 'close-session'> = {
+  '/exit': 'close-session',
+  '/quit': 'close-session',
+  '/close': 'close-session',
+}
+
 const MODE_PATHS: Record<AppMode, string> = {
   unconfigured: '/g/main',
   main: '/g/main',
@@ -32,6 +54,7 @@ const MODE_PATHS: Record<AppMode, string> = {
   'recording-turn': '/g/recording-turn',
   'confirming-transcript': '/g/confirming',
   answering: '/g/answering',
+  'browsing-folder': '/g/browsing',
 }
 
 const PATH_TO_SCREEN: Record<string, string> = {
@@ -42,6 +65,7 @@ const PATH_TO_SCREEN: Record<string, string> = {
   '/g/recording-turn': 'recording-turn',
   '/g/confirming': 'confirming-transcript',
   '/g/answering': 'answering',
+  '/g/browsing': 'browsing-folder',
 }
 
 function pathToScreen(pathname: string): string {
@@ -156,6 +180,9 @@ export function AppGlasses() {
     pendingQuestion: state.pendingQuestion,
     scrollingTranscript: state.scrollingTranscript,
     sidebarVisible: state.sidebarVisible,
+    browsePath: state.browsePath,
+    browseParent: state.browseParent,
+    browseDirs: state.browseDirs,
   }
   const snapshotRef = useRef(snapshot)
   snapshotRef.current = snapshot
@@ -184,7 +211,7 @@ export function AppGlasses() {
       store.setError("Didn't catch that")
       return null
     }
-    return text
+    return normalizeSpokenCommand(text)
   }
 
   // Execute confirmed transcript — either create new session or send follow-up.
@@ -208,7 +235,7 @@ export function AppGlasses() {
         return
       }
       try {
-        const summary = await createSession(projectName, text)
+        const summary = await createSession({ projectName }, text)
         store.upsertSession(summary)
         store.openSession(summary.id, [{ kind: 'user', text, ts: Date.now() }])
         store.setPendingTranscript(null)
@@ -222,6 +249,12 @@ export function AppGlasses() {
       const sid = store.getState().activeSessionId
       const text = store.getState().pendingTranscript
       if (!sid || !text) { store.enterMode('main'); return }
+      // andreas-mods: app-level commands never reach Claude.
+      if (APP_COMMANDS[text.toLowerCase()] === 'close-session') {
+        store.setPendingTranscript(null)
+        store.closeSession()
+        return
+      }
       try {
         await sendTurn(sid, text)
         store.setPendingTranscript(null)
@@ -280,7 +313,7 @@ export function AppGlasses() {
       const prompt = store.getState().pendingTranscript
       if (!prompt) { store.enterMode('main'); return }
       try {
-        const summary = await createSession(projectName, prompt)
+        const summary = await createSession({ projectName }, prompt)
         store.upsertSession(summary)
         store.openSession(summary.id, [{ kind: 'user', text: prompt, ts: Date.now() }])
         store.setPendingTranscript(null)
@@ -290,6 +323,48 @@ export function AppGlasses() {
         store.enterMode('main')
       }
     },
+
+    // andreas-mods -----------------------------------------------------------
+    changeTranscriptProject() {
+      if (!store.getState().pendingTranscript) return
+      store.setConfirmTranscriptFlow(null)
+      store.enterMode('picking-project')
+    },
+    async openFolderBrowser() {
+      try {
+        const r = await browseDirs()
+        store.setBrowseState(r.path, r.parent, r.dirs)
+        store.enterMode('browsing-folder')
+      } catch (err) {
+        console.error('[glass] browse failed:', err)
+        store.setError('Browse failed')
+      }
+    },
+    async browseTo(path: string) {
+      try {
+        const r = await browseDirs(path)
+        store.setBrowseState(r.path, r.parent, r.dirs)
+      } catch (err) {
+        console.error('[glass] browse failed:', err)
+        store.setError('Browse failed')
+      }
+    },
+    async pickBrowsedFolder(path: string) {
+      const prompt = store.getState().pendingTranscript
+      if (!prompt) { store.enterMode('main'); return }
+      try {
+        const summary = await createSession({ cwd: path }, prompt)
+        store.upsertSession(summary)
+        store.openSession(summary.id, [{ kind: 'user', text: prompt, ts: Date.now() }])
+        store.setPendingTranscript(null)
+        store.setSidebarVisible(false)
+      } catch (err) {
+        console.error('[glass] createSession (cwd) failed:', err)
+        store.setError('Create session failed')
+        store.enterMode('main')
+      }
+    },
+    // ------------------------------------------------------------------------
     async deleteSessionById(id: string) {
       store.deleteSession(id)
       try { await apiDeleteSession(id) } catch (err) {

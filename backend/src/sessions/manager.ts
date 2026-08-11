@@ -1,13 +1,32 @@
 import { randomUUID } from 'node:crypto'
+import * as fs from 'node:fs'
+import * as os from 'node:os'
+import * as path from 'node:path'
 import type { RuntimeConfig } from '../config.ts'
 import type { SseHub } from '../events.ts'
 import { ClaudeCodeProc } from './claudeProc.ts'
 import { SessionStore, type Session, type SessionSummary, type TranscriptEvent } from './store.ts'
 
 export interface CreateSessionOpts {
-  projectName: string
+  projectName?: string
+  // Ad-hoc working directory (from the folder browser). Must be an existing
+  // directory under $HOME. Takes precedence over projectName.
+  cwd?: string
   firstPrompt: string
   model?: string
+}
+
+// Resolve + validate an ad-hoc cwd. The home boundary matches /api/browse:
+// the glasses can start a session anywhere they can browse, nowhere else.
+export function resolveAdHocCwd(raw: string): string {
+  const home = os.homedir()
+  const resolved = path.resolve(raw)
+  if (resolved !== home && !resolved.startsWith(home + path.sep)) {
+    throw new Error(`cwd must be inside ${home}`)
+  }
+  const st = fs.statSync(resolved)
+  if (!st.isDirectory()) throw new Error(`cwd is not a directory: ${resolved}`)
+  return resolved
 }
 
 export class SessionManager {
@@ -46,9 +65,18 @@ export class SessionManager {
   }
 
   create(opts: CreateSessionOpts): Session {
-    const project = this.cfg.projects.find((p) => p.name === opts.projectName)
-    if (!project) {
-      throw new Error(`Unknown project: ${opts.projectName}`)
+    let projectName: string
+    let cwd: string
+    if (opts.cwd) {
+      cwd = resolveAdHocCwd(opts.cwd)
+      projectName = path.basename(cwd) || '~'
+    } else {
+      const project = this.cfg.projects.find((p) => p.name === opts.projectName)
+      if (!project) {
+        throw new Error(`Unknown project: ${opts.projectName}`)
+      }
+      projectName = project.name
+      cwd = project.path
     }
 
     const now = Date.now()
@@ -57,8 +85,8 @@ export class SessionManager {
     const session: Session = {
       id,
       title,
-      projectName: project.name,
-      cwd: project.path,
+      projectName,
+      cwd,
       createdAt: now,
       lastActiveAt: now,
       transcript: [
@@ -71,7 +99,7 @@ export class SessionManager {
       kind: 'session_created',
       sessionId: id,
       title,
-      projectName: project.name,
+      projectName,
       ts: now,
     })
 

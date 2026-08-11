@@ -1,4 +1,7 @@
 import 'dotenv/config'
+import * as fs from 'node:fs'
+import * as os from 'node:os'
+import * as path from 'node:path'
 import express, { type Request, type Response, type NextFunction } from 'express'
 import { loadConfig, saveSettings, type SettingsUpdate } from './config.ts'
 import { bearerAuth, checkToken, extractToken } from './auth.ts'
@@ -138,17 +141,47 @@ authed.get('/sessions/:id', (req, res) => {
   })
 })
 
+// Directory browser for the glasses folder picker. Read-only, dirs only,
+// scoped to $HOME — the same boundary ad-hoc session cwds are validated
+// against in the session manager.
+authed.get('/browse', (req, res) => {
+  const home = os.homedir()
+  const requested = String(req.query.path ?? home)
+  const resolved = path.resolve(requested)
+  if (resolved !== home && !resolved.startsWith(home + path.sep)) {
+    res.status(400).json({ error: `path must be inside ${home}` })
+    return
+  }
+  try {
+    const entries = fs.readdirSync(resolved, { withFileTypes: true })
+    const dirs = entries
+      .filter((e) => e.isDirectory() && !e.name.startsWith('.') && e.name !== 'node_modules')
+      .map((e) => e.name)
+      .sort((a, b) => a.localeCompare(b))
+      .slice(0, 200)
+    res.json({
+      path: resolved,
+      parent: resolved === home ? null : path.dirname(resolved),
+      dirs,
+    })
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message })
+  }
+})
+
 authed.post('/sessions', (req, res) => {
-  const body = req.body as { projectName?: string; firstPrompt?: string; model?: string }
+  const body = req.body as { projectName?: string; cwd?: string; firstPrompt?: string; model?: string }
   const projectName = String(body.projectName ?? '').trim()
+  const cwd = String(body.cwd ?? '').trim()
   const firstPrompt = String(body.firstPrompt ?? '').trim()
-  if (!projectName || !firstPrompt) {
-    res.status(400).json({ error: 'projectName and firstPrompt required' })
+  if ((!projectName && !cwd) || !firstPrompt) {
+    res.status(400).json({ error: 'projectName or cwd, and firstPrompt required' })
     return
   }
   try {
     const session = manager.create({
-      projectName,
+      projectName: projectName || undefined,
+      cwd: cwd || undefined,
       firstPrompt,
       model: body.model,
     })
