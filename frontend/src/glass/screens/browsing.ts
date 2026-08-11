@@ -37,13 +37,19 @@ export const browsingScreen: GlassScreen<AppSnapshot, AppActions> = {
   display(snapshot, nav) {
     const list = items(snapshot)
     const lines = [
-      line(`BROWSE  ${shortenPath(snapshot.browsePath ?? '~', 34)}`, 'meta'),
+      line(`BROWSE  ${shortenPath(snapshot.browsePath ?? '~', 27)}  ${snapshot.browseDirs.length} dirs`, 'meta'),
       line('━'.repeat(40), 'meta'),
     ]
+    // Same as the project picker: keep what Whisper heard on screen so the
+    // wearer never loses track of the prompt they're routing.
+    const heard = (snapshot.pendingTranscript ?? '').trim()
+    if (heard) {
+      lines.push(line(`> ${heard.length > 42 ? heard.slice(0, 41) + '…' : heard}`))
+    }
     lines.push(...buildScrollableList({
       items: list,
       highlightedIndex: Math.min(nav.highlightedIndex, list.length - 1),
-      maxVisible: 6,
+      maxVisible: 5,
       formatter: (item) => item,
     }))
     while (lines.length < 9) lines.push(line(''))
