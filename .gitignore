@@ -24,3 +24,4 @@ frontend/glasses_*.png
 /HELLO*
 !/README.md
 .gstack/
+frontend/*.ehpk

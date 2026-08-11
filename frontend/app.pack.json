@@ -1,0 +1,20 @@
+{
+  "package_id": "com.aplaino.ccg2",
+  "edition": "202601",
+  "name": "Claude Code G2 Fork",
+  "version": "0.2.0",
+  "min_app_version": "2.0.0",
+  "min_sdk_version": "0.0.10",
+  "entrypoint": "index.html",
+  "permissions": [
+    {
+      "name": "g2-microphone",
+      "desc": "Dictate prompts to Claude Code with the glasses microphone"
+    },
+    {
+      "name": "network",
+      "desc": "Reach the Claude Code backend on the private tailnet"
+    }
+  ],
+  "supported_languages": ["en"]
+}

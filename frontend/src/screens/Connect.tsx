@@ -73,7 +73,9 @@ async function runDiagnose(backendUrl: string): Promise<DiagnoseResult> {
 
 export function Connect() {
   const state = useAppState()
-  const [urlInput, setUrlInput] = useState('')
+  // andreas-mods: prefill the known backend so a fresh (packed) install only
+  // needs the token typed once. The URL is tailnet-only — not a secret.
+  const [urlInput, setUrlInput] = useState('https://andreass-macbook-pro.tailf11517.ts.net:8443')
   const [tokenInput, setTokenInput] = useState('')
   const [saving, setSaving] = useState(false)
   const [diagnose, setDiagnose] = useState<DiagnoseResult | null>(null)
