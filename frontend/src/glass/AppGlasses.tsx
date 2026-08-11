@@ -20,29 +20,10 @@ import {
 import type { AppMode, SseEvent } from '../types'
 import { startCapture, stopCapture } from '../audio'
 
+import { appCommandFor, normalizeSpokenCommand } from './voiceCommands'
+
 function fallbackModeAfterRecording(): AppMode {
   return 'main'
-}
-
-// andreas-mods: Whisper transcribes spoken slash commands as literal words
-// ("Slash commit."). Rewrite "slash <word> ..." into "/<word> ..." so custom
-// slash commands and skills reach Claude intact. The rewritten form shows on
-// the confirm screen before anything is sent.
-export function normalizeSpokenCommand(text: string): string {
-  const m = /^slash[,.]?\s+(\S+)(.*)$/i.exec(text.trim())
-  if (!m) return text
-  const command = m[1]!.toLowerCase().replace(/[.,!?]+$/, '')
-  const rest = (m[2] ?? '').replace(/[.!?]+\s*$/, '').trim()
-  return rest ? `/${command} ${rest}` : `/${command}`
-}
-
-// Commands the app handles itself instead of sending to Claude. Each turn
-// already runs a fresh `claude -p` process, so CLI built-ins like /exit have
-// no process to act on — "exit" here means "close this session view".
-const APP_COMMANDS: Record<string, 'close-session'> = {
-  '/exit': 'close-session',
-  '/quit': 'close-session',
-  '/close': 'close-session',
 }
 
 const MODE_PATHS: Record<AppMode, string> = {
@@ -214,12 +195,31 @@ export function AppGlasses() {
     return normalizeSpokenCommand(text)
   }
 
+  // andreas-mods: run an app-level command (from voiceCommands). Returns true
+  // if the text was a command and was handled — it must not reach Claude.
+  function runAppCommand(text: string): boolean {
+    const cmd = appCommandFor(text)
+    if (!cmd) return false
+    const sid = store.getState().activeSessionId
+    store.setPendingTranscript(null)
+    if (cmd === 'clear-session' && sid) {
+      store.closeSession()
+      void actions.current.deleteSessionById(sid)
+    } else {
+      store.closeSession()
+    }
+    return true
+  }
+
   // Execute confirmed transcript — either create new session or send follow-up.
   async function executeTranscriptFlow(flow: 'new' | 'turn') {
     store.setConfirmTranscriptFlow(null)
     if (flow === 'new') {
       const text = store.getState().pendingTranscript
       if (!text) { store.enterMode('main'); return }
+      // A spoken command with no session yet has nothing to act on — swallow
+      // it instead of creating a junk session named "/exit".
+      if (runAppCommand(text)) return
       // Use default project — no picker. If no default and >1 project, fall back to picker.
       const { defaultProjectName, projects } = store.getState()
       const projectName = defaultProjectName ?? projects[0]
@@ -250,11 +250,7 @@ export function AppGlasses() {
       const text = store.getState().pendingTranscript
       if (!sid || !text) { store.enterMode('main'); return }
       // andreas-mods: app-level commands never reach Claude.
-      if (APP_COMMANDS[text.toLowerCase()] === 'close-session') {
-        store.setPendingTranscript(null)
-        store.closeSession()
-        return
-      }
+      if (runAppCommand(text)) return
       try {
         await sendTurn(sid, text)
         store.setPendingTranscript(null)
